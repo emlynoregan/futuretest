@@ -1,12 +1,13 @@
 var Tests = Vue.component('tests', {
   template: `
     <div>
-	  <p>Search: <input v-model="searchtext" placeholder="test name or tags"></p>
-	  <ul>
-		  <li v-for="test in tests">
-		  	<test-list-item :test="test" />
-		  </li>
-	  </ul>
+	  <md-field md-clearable>	
+      	<label>search by test name or tags</label>
+	  	<md-input v-model="searchtext"></md-input>
+	  </md-field>
+	  <md-list class="md-double-line">
+	    <test-list-item v-for="test in tests" :test="test" :key="test.name"/>
+	  </md-list>
 	</div>
   `,
   data: function() 
@@ -18,6 +19,7 @@ var Tests = Vue.component('tests', {
   },
   created: function () {
 	  this.getTests()
+	  this.$emit("title", "Search Tests");
   },
   computed: {
 	tests: function() 
@@ -37,16 +39,18 @@ var Tests = Vue.component('tests', {
 					var matches = _.filter(
 						searchelems,
 						function(item) {
+							var escapedItem = _.escapeRegExp(item);
+							
 							return item && 
 								(
-									(test.name.search(item) >= 0) ||
+									(test.name.search(escapedItem) >= 0) ||
 									(
 										_.filter
 										(
 											test.tags,
 											function(tag)
 											{
-												return tag && tag.search(item) >= 0;
+												return tag && tag.search(escapedItem) >= 0;
 											}
 										).length > 0
 									)

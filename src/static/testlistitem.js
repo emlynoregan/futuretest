@@ -8,15 +8,13 @@ Vue.component('test-list-item', {
 	}  
   },
   template: `
-	  <div @click="navtodetail">
-		  <div>
-		  	<span>{{test.name}}</span>
-		  	<span v-if="tagstring.length > 0">(tags: {{tagstring}})</span>  
-		  </div>
-		  <div v-if="test.description">
-		  	<span>{{test.description}}</span>
-		  </div>
-	  </div>
+    <md-list-item @click="navtodetail">
+	  	<md-icon>assignment</md-icon>
+  		<span class="md-list-item-text">
+  			<span>{{test.name}}</span>
+	  		<span v-if="tagstring.length > 0 || test.description">(tags: {{tagstring}}) {{test.description}}</span>  
+	  	</span>
+	</md-list-item>
   `,
   methods: {
 	navtodetail()

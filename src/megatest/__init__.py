@@ -1,6 +1,7 @@
 import functools
 from model import TestRun
 import logging
+from google.appengine.ext import ndb
 
 _tests = {}
         
@@ -65,11 +66,11 @@ def get_tests(tags = None):
     def tagmatch(testtags):
         return testtags and set(testtags).intersection(set(tags))    
 
-    retval = [
+    retval = sorted([
         _cleantest(ltest) 
         for ltest in _tests.values()
         if not tags or tagmatch(ltest.get("tags"))
-    ]
+    ], key=lambda test: test.get("name"))
     
     return retval
         
@@ -80,7 +81,7 @@ def get_json_testrun_by_id(testid):
     return _to_json(get_testrun_by_id(testid))
     
     
-def get_testruns(testname = None, statuses = None):
+def get_testruns(testname = None, statuses = None, cursorWS = None):
     lqry = TestRun.query()
     if testname:
         lqry = lqry.filter(TestRun.testname == testname)
@@ -88,10 +89,17 @@ def get_testruns(testname = None, statuses = None):
         lqry = lqry.filter(TestRun.status in statuses)
     lqry = lqry.order(-TestRun.started)
     
-    return [
-        _to_json(ltestRun)
-        for ltestRun in lqry
-    ]
+    lcursor = ndb.Cursor(urlsafe=cursorWS) if cursorWS else None
+
+    lresults, lcursor, lmore = lqry.fetch_page(5, start_cursor = lcursor)
+
+    return {
+        "results": [
+            _to_json(ltestRun)
+            for ltestRun in lresults
+        ],
+        "cursor": lcursor.urlsafe() if lmore else None
+    }
 
 def cancel_test_run(testrun):
     if testrun:

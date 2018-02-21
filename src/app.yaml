@@ -15,6 +15,7 @@ handlers:
 - url: /
   static_files: static/spa.html
   login: required
+  upload: /
     
 - url: /.*
   script: main.app

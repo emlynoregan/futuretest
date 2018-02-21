@@ -3,7 +3,7 @@ from megatest import get_test_by_name, get_tests, get_testrun_by_id,\
     get_testruns, run_test, cancel_test_run, delete_test_run,\
     get_json_testrun_by_id
 import json
-
+import logging
 _base_route = "megatest"
 
 def _create_route(suffix):
@@ -57,6 +57,7 @@ def register_tests_api(app):
             lid = request.args.get('id')
             ltestname = request.args.get('name')
             lstatuses = request.args.get('statuses')
+            lcursorWS = request.args.get("cursor")
     
             retval = None
             if lid:
@@ -64,7 +65,7 @@ def register_tests_api(app):
                 if not retval:
                     return "can't find test run for id %s" % lid, 404
             else:
-                retval = get_testruns(ltestname, lstatuses)
+                retval = get_testruns(ltestname, lstatuses, lcursorWS)
                 
             return jsonify(retval)    
         else: # POST
@@ -93,6 +94,7 @@ def register_tests_api(app):
                     if not ltestRun:
                         return "can't find test run for id %s" % lid, 404
                     else:
+                        logging.debug("here")
                         delete_test_run(ltestRun)
                         return "ok", 200
             else:

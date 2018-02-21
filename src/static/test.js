@@ -2,31 +2,50 @@ var Test = Vue.component('test', {
   data: function() {
 	  return {
 		  "statuses": ["underway", "pass", "fail"],
-		  "runs": []
+		  "cursor": null
 	  }
   },
-  props: [ "testname" ],
+  props: [ "testname", "runs_by_test" ],
   template: `
     <div>
-	    <div @click="navtotests">(back to tests)</div>
+	    <md-button @click="navtotests">back to tests</md-button>
 	    <div>
-		  <div>
-		  	<span>Test: {{testname}}</span>
-	  		<button @click="ongo">Go</button>
-		  </div>
-		  <div v-if="runs.length">
-			  <ul>
-				  <li v-for="run in runs" :key="run.id">
-				  	<runs-list-item :inrun="run" />
-				  </li>
-			  </ul>
-		  </div>
-		  <div v-else>No runs</div>
+			<div v-if="runs.length">
+				<md-list class="md-double-line">
+				  <runs-list-item v-for="run in runs" :runid="run.id" :key="run.id"/>
+				</md-list>
+			</div>
+			<div v-else>No runs</div>
+			<md-button v-if="more" @click=onmore>
+			    more
+			</md-button>
+			<md-button class="md-fab md-fab-top-right" @click=ongo :style="{ zIndex: 9999 }" md-elevation-24>
+			    <md-icon>add</md-icon>
+			</md-button>
 		</div>
 	</div>
   `,
   created: function () {
-	  this.getRuns()
+	  this.$emit("title", this.testname);
+	  this.getRuns();
+  },
+  computed: {
+	  runs: function() {
+		  var ids = store.getters.runids_by_test[this.testname];
+		  var retval = _.map(
+			ids, 
+			function(id) 
+			{
+				return store.getters.runs_by_id[id];
+			}
+		  );
+			
+		  return retval;
+	  },
+	  more: function()
+	  {
+		  return store.getters.cursors_by_test[this.testname] != "-";
+	  }
   },
   methods: {
 	navtotests()
@@ -35,17 +54,12 @@ var Test = Vue.component('test', {
 	},
     getRuns() 
     {
-	  var lquery = {
-		name: this.testname,
-	    statuses: this.statuses
-	  };
-	  
-      this.$http.get('/megatest/runs', {params: lquery}).then(
-        function (response) 
-	    {
-	      this.runs = response.data;
-	    }
-      );
+		if (!this.$store.getters.runids_by_test[this.testname])
+			this.$store.commit("load_runids", {testname: this.testname, http: this.$http});
+    },
+    onmore() 
+    {
+    	this.$store.commit("load_runids", {testname: this.testname, http: this.$http});
     },
     ongo()
     {
@@ -59,34 +73,7 @@ var Test = Vue.component('test', {
       this.$http.post('/megatest/tests', lquery).then(
         function (response) 
 	    {
-        	var id = response.data.id;
-        	
-        	console.log(id);
-
-        	var numtries = 10;
-        	function wait_for_run() {
-	            _app.$http.get('/megatest/runs', {params: {id: id}}).then(
-				    function (response) 
-				    {
-				    	console.log(response);
-				    	
-				    	if (response)// && (numtries <= 0))// || ["underway", "pass", "fail"].indexOf(response.body.status) >= 0))
-				    	{
-				        	_app.getRuns();
-				    	}
-				    	else
-				    	{
-				    		numtries--;
-				    		setTimeout(
-				    			wait_for_run,
-				    			1000
-				    		);
-				    	}
-				    }
-				);
-        	}
-        	
-        	wait_for_run();
+        	this.$store.commit("push_run_placeholder", {id: response.data.id, testname: this.testname});
 	    }
       );
     }

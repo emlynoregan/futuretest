@@ -5,9 +5,9 @@ from taskutils.debouncedtask import debouncedtask
 import datetime
 from megatest.util import DateTimeToUnixTimestampMicrosec
 
-_TEST_RUN_STATUSES = ["pre", "underway", "pass", "fail"]
-_TEST_RUN_STATUS_PRE = _TEST_RUN_STATUSES[0]
-_TEST_RUN_STATUS_UNDERWAY = _TEST_RUN_STATUSES[1]
+_TEST_RUN_STATUSES = ["constructing", "running", "pass", "fail"]
+_TEST_RUN_STATUS_NOT_READY = _TEST_RUN_STATUSES[0]
+_TEST_RUN_STATUS_READY = _TEST_RUN_STATUSES[1]
 _TEST_RUN_STATUS_PASS = _TEST_RUN_STATUSES[2]
 _TEST_RUN_STATUS_FAIL = _TEST_RUN_STATUSES[3]
 
@@ -32,7 +32,10 @@ class TestRun(ndb.model.Model):
     @classmethod
     def construct_key_for_id(cls, aId):
         return ndb.Key(TestRun, aId)
-        
+
+    def get_future(self):
+        return self.futurekey.get() if self.futurekey else None
+            
     @classmethod
     def go(cls, testDef):
         lrunKey = cls.construct_key()
@@ -40,7 +43,7 @@ class TestRun(ndb.model.Model):
         lrun = TestRun(
             key = lrunKey,
             testname = testDef.get("name"),
-            status = _TEST_RUN_STATUS_PRE,
+            status = _TEST_RUN_STATUS_NOT_READY,
             progress = 0,
             
         )
@@ -60,7 +63,7 @@ class TestRun(ndb.model.Model):
             if futureobj:
                 lrun = lrunKey.get()
                 
-                if lrun and lrun.status in [_TEST_RUN_STATUS_PRE, _TEST_RUN_STATUS_UNDERWAY]:
+                if lrun and lrun.status in [_TEST_RUN_STATUS_NOT_READY, _TEST_RUN_STATUS_READY]:
                     lrun.status = _TEST_RUN_STATUS_PASS
                     lrun.progress = 100
                     lresult = futureobj.get_result()
@@ -74,7 +77,7 @@ class TestRun(ndb.model.Model):
             if futureobj:
                 lrun = lrunKey.get()
                 
-                if lrun and lrun.status in [_TEST_RUN_STATUS_PRE, _TEST_RUN_STATUS_UNDERWAY]:
+                if lrun and lrun.status in [_TEST_RUN_STATUS_NOT_READY, _TEST_RUN_STATUS_READY]:
                     lrun.status = _TEST_RUN_STATUS_FAIL
                     lrun.progress = 100
                     try:
@@ -89,7 +92,7 @@ class TestRun(ndb.model.Model):
             futureobj = futurekey.get() if futurekey else None
             if futureobj:
                 lrun = lrunKey.get()
-                if lrun and lrun.status in [_TEST_RUN_STATUS_PRE, _TEST_RUN_STATUS_UNDERWAY]:
+                if lrun and lrun.status in [_TEST_RUN_STATUS_NOT_READY, _TEST_RUN_STATUS_READY]:
                     lrun.progress = futureobj.get_calculatedprogress()
                     lrun.put()
         
@@ -109,6 +112,12 @@ class TestRun(ndb.model.Model):
         return lrun
 
     def to_json(self):
+        if self.status in [_TEST_RUN_STATUS_NOT_READY, _TEST_RUN_STATUS_READY]:
+            lfut = self.get_future()
+            lstatus = _TEST_RUN_STATUS_READY if lfut.readyforresult else _TEST_RUN_STATUS_READY
+        else:
+            lstatus = self.status
+
         retval = {
             "id": self.key.id(),
             "testname": self.testname,
@@ -116,30 +125,25 @@ class TestRun(ndb.model.Model):
             "stored_desc": self.stored,
             "updated": DateTimeToUnixTimestampMicrosec(self.updated) if not self.updated is None else None,
             "updated_desc": self.updated,
-            "status": self.status
+            "status": lstatus,
+            "started": DateTimeToUnixTimestampMicrosec(self.started),
+            "started_desc": self.started,
+            "progress": self.progress,
+            "futurekey": self.futurekey.urlsafe() if self.futurekey else None
         }
-        
-        if self.status in [_TEST_RUN_STATUS_UNDERWAY, _TEST_RUN_STATUS_PASS, _TEST_RUN_STATUS_FAIL]:
-            retval.update({
-                "started": DateTimeToUnixTimestampMicrosec(self.started),
-                "started_desc": self.started,
-                "progress": self.progress,
-                "futurekey": self.futurekey.urlsafe() if self.futurekey else None,
-            })        
 
         if self.status in [_TEST_RUN_STATUS_PASS, _TEST_RUN_STATUS_FAIL]:
             retval.update({
                 "final_runtime_usec": self.final_runtime_usec,
                 "final_message": self.final_message
-            })        
+            })
         
         return retval
 
     def cancel(self):
-        if self.status in [_TEST_RUN_STATUS_UNDERWAY]:
-            fut = self.futurekey.get if self.futurekey else None
+        if not self.status in [_TEST_RUN_STATUS_PASS, _TEST_RUN_STATUS_FAIL]:
+            fut = self.futurekey.get() if self.futurekey else None
             
             if fut:
-                fut.cancel()
-    
+                fut.cancel()    
     
